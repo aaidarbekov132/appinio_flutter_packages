@@ -1,3 +1,6 @@
+## [1.2.3] - 2025.05.06
+- Fix: Bad state error on exit full screen
+
 ## [1.2.2] - 2023.08.23
 
 - Feat: Jump forward and backward like youtube.

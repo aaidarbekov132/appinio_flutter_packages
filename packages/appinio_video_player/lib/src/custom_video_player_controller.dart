@@ -84,6 +84,7 @@ class CustomVideoPlayerController {
   }
 
   Future<void> _exitFullscreen() async {
+    final navigator = Navigator.of(context);
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     await SystemChrome.setEnabledSystemUIMode(
       customVideoPlayerSettings.systemUIModeAfterFullscreen,
@@ -92,7 +93,9 @@ class CustomVideoPlayerController {
     await SystemChrome.setPreferredOrientations(customVideoPlayerSettings
         .deviceOrientationsAfterFullscreen); // reset device orientation values
     _isFullscreen = false;
-    Navigator.of(context).pop();
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
   }
 
   void _setOrientationForVideo() {
