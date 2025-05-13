@@ -158,23 +158,20 @@ class AppinioSwiper extends StatefulWidget {
     this.onSwipeCancelled,
   })  : assert(maxAngle >= 0),
         assert(threshold > 0),
-        assert(initialIndex == null ||
-            (initialIndex >= 0 && initialIndex <= cardCount)),
+        assert(initialIndex == null || (initialIndex >= 0 && initialIndex <= cardCount)),
         super(key: key);
 
   @override
   State createState() => _AppinioSwiperState();
 }
 
-class _AppinioSwiperState extends State<AppinioSwiper>
-    with TickerProviderStateMixin {
+class _AppinioSwiperState extends State<AppinioSwiper> with TickerProviderStateMixin {
   bool _canUnSwipeOnce = false;
   static const _defaultBackgroundCardOffset = Offset(0, 40);
 
   double get _effectiveScaleIncrement => 1 - widget.backgroundCardScale;
 
-  Offset get _effectiveOffset =>
-      widget.backgroundCardOffset ?? _defaultBackgroundCardOffset;
+  Offset get _effectiveOffset => widget.backgroundCardOffset ?? _defaultBackgroundCardOffset;
 
   SwiperActivity? _swipeActivity;
 
@@ -234,6 +231,15 @@ class _AppinioSwiperState extends State<AppinioSwiper>
     widget.onUnSwipe?.call(unSwipe);
   }
 
+  Future<void> _onUnswipeWithDirection(AxisDirection direction) async {
+    final Unswipe unSwipe = Unswipe(
+      _defaultAnimation,
+      begin: _directionToTarget(direction),
+    );
+    await _startActivity(unSwipe);
+    widget.onUnSwipe?.call(unSwipe);
+  }
+
   // Moves the card back to starting position when a drag finished without
   // having reached the threshold.
   void _onSwipeCancelled(BuildContext context) async {
@@ -253,8 +259,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
       oldActivity.animation.stop();
       await _previousActivityFuture;
     }
-    final int targetIndex =
-        _position._baseIndexToEffectiveIndex(switch (newActivity) {
+    final int targetIndex = _position._baseIndexToEffectiveIndex(switch (newActivity) {
       Swipe() => _position._baseIndex + 1,
       Unswipe() => _position._baseIndex - 1,
       CancelSwipe() => _position._baseIndex,
@@ -269,11 +274,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
       setState(() {});
     });
     widget.onSwipeBegin?.call(_position.index, targetIndex, newActivity);
-    _previousActivityFuture = newActivity.animation
-        .forward()
-        .orCancel
-        .then((_) => false)
-        .onError((error, stackTrace) {
+    _previousActivityFuture = newActivity.animation.forward().orCancel.then((_) => false).onError((error, stackTrace) {
       if (error is TickerCanceled) {
         return true;
       }
@@ -374,11 +375,8 @@ class _AppinioSwiperState extends State<AppinioSwiper>
         // loop is enabled and we're undoing the first card in the list.
         ? (_position.index + widget.cardCount - 1) % widget.cardCount
         : _position.index;
-    final int backgroundIndex = _swipeActivity is Unswipe
-        ? foregroundIndex
-        : (foregroundIndex + 1) % widget.cardCount;
-    final int effectiveBackgroundCardCount =
-        _effectiveBackgroundCardCount(backgroundIndex);
+    final int backgroundIndex = _swipeActivity is Unswipe ? foregroundIndex : (foregroundIndex + 1) % widget.cardCount;
+    final int effectiveBackgroundCardCount = _effectiveBackgroundCardCount(backgroundIndex);
     return Stack(
       clipBehavior: Clip.none,
       fit: StackFit.expand,
@@ -394,8 +392,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
             scaleIncrement: _effectiveScaleIncrement,
             offsetIncrement: _effectiveOffset,
             initialEffectFactor: 1 - maxProgressToThreshold,
-            fadeLastItem:
-                effectiveBackgroundCardCount > widget.backgroundCardCount,
+            fadeLastItem: effectiveBackgroundCardCount > widget.backgroundCardCount,
           ),
         if (foregroundIndex < widget.cardCount)
           Transform.translate(
@@ -403,8 +400,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
             child: GestureDetector(
               child: Transform.rotate(
                 angle: _position.angleRadians,
-                alignment:
-                    _position._rotationAlignment ?? Alignment.bottomCenter,
+                alignment: _position._rotationAlignment ?? Alignment.bottomCenter,
                 child: Container(
                   child: widget.cardBuilder(context, foregroundIndex),
                 ),
@@ -465,8 +461,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
       return effectiveCardCount;
     }
     final int remaining = widget.cardCount - _position.index - 1;
-    return (_swipeActivity is Unswipe ? remaining + 1 : remaining)
-        .clamp(0, effectiveCardCount);
+    return (_swipeActivity is Unswipe ? remaining + 1 : remaining).clamp(0, effectiveCardCount);
   }
 
   Future<void> _onSwiping() async {
@@ -487,8 +482,7 @@ class _AppinioSwiperState extends State<AppinioSwiper>
     // TODO: Use a ballistic simulation to determine if the swipe should be
     // triggered or not.
     // See the snapping behavior from `DraggableScrollableSheet`.
-    if (_position._offsetRelativeToThreshold.dx.abs() < 1 &&
-        _position._offsetRelativeToThreshold.dy.abs() < 1) {
+    if (_position._offsetRelativeToThreshold.dx.abs() < 1 && _position._offsetRelativeToThreshold.dy.abs() < 1) {
       return _onSwipeCancelled(context);
     }
     await _onSwipe(_position.offset.toAxisDirection());
@@ -540,9 +534,7 @@ class _BackgroundCards extends StatelessWidget {
                   return MapEntry(
                     j,
                     Opacity(
-                      opacity: fadeLastItem && j == indices.length - 1
-                          ? min(1, position.progress)
-                          : 1,
+                      opacity: fadeLastItem && j == indices.length - 1 ? min(1, position.progress) : 1,
                       child: Transform.translate(
                         offset: offset,
                         child: Transform.scale(
@@ -639,6 +631,12 @@ class AppinioSwiperController extends ChangeNotifier {
   Future<void> unswipe() async {
     _assertIsAttached();
     await _attachedSwiper!._onUnswipe();
+    notifyListeners();
+  }
+
+  Future<void> unswipeWithDirection(AxisDirection direction) async {
+    _assertIsAttached();
+    await _attachedSwiper!._onUnswipeWithDirection(direction);
     notifyListeners();
   }
 
@@ -739,13 +737,8 @@ class SwiperPosition with ChangeNotifier {
   double get angle {
     // If we allow inverting the direction and the user is dragging from the
     // bottom half of the card, angle in the opposite direction.
-    final direction = _invertAngleOnBottomDrag &&
-            _rotationAlignment != null &&
-            _rotationAlignment!.y > 0
-        ? -1
-        : 1;
-    return (direction * _maxAngle * (_offset.dx / _cardSize.width))
-        .clamp(-_maxAngle, _maxAngle);
+    final direction = _invertAngleOnBottomDrag && _rotationAlignment != null && _rotationAlignment!.y > 0 ? -1 : 1;
+    return (direction * _maxAngle * (_offset.dx / _cardSize.width)).clamp(-_maxAngle, _maxAngle);
   }
 
   /// The rotation angle of the card in radians.
